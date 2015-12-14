@@ -7,8 +7,11 @@ import com.lucaslabs.achis.model.SocialNetwork;
 import java.util.List;
 
 import rx.Observable;
+import rx.Scheduler;
+import rx.Subscriber;
 import rx.functions.Func1;
 import rx.functions.FuncN;
+import rx.schedulers.Schedulers;
 import rx.subscriptions.CompositeSubscription;
 
 /**
@@ -22,6 +25,8 @@ public class Achis {
 
     private List<SocialNetwork> socialNetworks;
     private String hashtag;
+    private Scheduler observeOnScheduler;
+    private Subscriber<Item> subscriber;
 
     // Polling strategy
     private CompositeSubscription subscription;
@@ -29,10 +34,11 @@ public class Achis {
     private static final int POLLING_INTERVAL = 1; // 1 minute
 
 
-    private Achis(List<SocialNetwork> socialNetworks, String hashtag) {
+    private Achis(List<SocialNetwork> socialNetworks, String hashtag, Scheduler observeOnScheduler, Subscriber<Item> subscriber) {
         this.socialNetworks = socialNetworks;
         this.hashtag = hashtag;
-        //   TODO-LMN Create subscription = new CompositeSubscription();
+        this.observeOnScheduler = observeOnScheduler;
+        this.subscriber = subscriber;
     }
 
     public void unsubscribe() {
@@ -42,6 +48,8 @@ public class Achis {
     public static class Builder {
         private List<SocialNetwork> networks;
         private String hashtag;
+        private Scheduler observeOnScheduler;
+        private Subscriber<Item> subscriber;
 
         public Builder socialNetworks(List<SocialNetwork> networks) {
             this.networks = networks;
@@ -53,15 +61,32 @@ public class Achis {
             return this;
         }
 
+        public Builder observeOnScheduler(Scheduler observeOnScheduler) {
+            this.observeOnScheduler = observeOnScheduler;
+            return this;
+        }
+
+        public Builder subscriber(Subscriber<Item> subscriber) {
+            this.subscriber = subscriber;
+            return this;
+        }
+
         public Achis build() {
-            return new Achis(networks, hashtag);
+            return new Achis(networks, hashtag, observeOnScheduler, subscriber);
         }
     }
 
 
+    public void performSearchByHashtag() {
+        searchByHashtagObservable()
+                .subscribeOn(Schedulers.io()) // performs networking on background thread
+                .observeOn(observeOnScheduler) // sends notifications to another Scheduler, usually the UI thread
+                .subscribe(subscriber);
+    }
+
     public Observable<Item> searchByHashtag() {
         // TODO-LMN Add polling strategy
-        return searchSocialNetworksByHashtag();
+        return searchByHashtagObservable();
     }
 
     //    private Observable<Item> pollingObservable() {
@@ -72,14 +97,14 @@ public class Achis {
     //                        .schedulePeriodically(new Action0() {
     //                            @Override
     //                            public void call() {
-    //                                subscriber.onNext(searchSocialNetworksByHashtag());
+    //                                subscriber.onNext(searchByHashtagObservable());
     //                            }
     //                        }, INITIAL_DELAY, POLLING_INTERVAL, TimeUnit.MINUTES);
     //            }
     //        });
     //    }
 
-    private Observable<Item> searchSocialNetworksByHashtag() {
+    private Observable<Item> searchByHashtagObservable() {
         Observable<Item> observableSocialNetworks =
                 Observable.from(socialNetworks)
                           .flatMap(new Func1<SocialNetwork, Observable<Item>>() {
