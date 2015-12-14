@@ -100,7 +100,7 @@ public class Achis {
     }
 
     public void searchByHashtag() {
-        Scheduler.Worker worker = Schedulers.newThread().createWorker();
+        Scheduler.Worker worker = Schedulers.io().createWorker();
         worker.schedulePeriodically(new Action0() {
             @Override
             public void call() {
