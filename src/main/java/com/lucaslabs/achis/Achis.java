@@ -1,18 +1,20 @@
 package com.lucaslabs.achis;
 
+import com.google.common.base.Preconditions;
 import com.google.common.collect.Lists;
 import com.lucaslabs.achis.model.Item;
 import com.lucaslabs.achis.model.SocialNetwork;
 
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 import rx.Observable;
 import rx.Scheduler;
 import rx.Subscriber;
+import rx.functions.Action0;
 import rx.functions.Func1;
 import rx.functions.FuncN;
 import rx.schedulers.Schedulers;
-import rx.subscriptions.CompositeSubscription;
 
 /**
  * Main class of the library.
@@ -29,20 +31,24 @@ public class Achis {
     private Subscriber<Item> subscriber;
 
     // Polling strategy
-    private CompositeSubscription subscription;
     private static final int INITIAL_DELAY = 0;
     private static final int POLLING_INTERVAL = 1; // 1 minute
+    private int initialDelay;
+    private int pollingInterval;
 
 
-    private Achis(List<SocialNetwork> socialNetworks, String hashtag, Scheduler observeOnScheduler, Subscriber<Item> subscriber) {
+    private Achis(List<SocialNetwork> socialNetworks,
+            String hashtag,
+            Scheduler observeOnScheduler,
+            Subscriber<Item> subscriber,
+            int initialDelay,
+            int pollingInterval) {
         this.socialNetworks = socialNetworks;
         this.hashtag = hashtag;
         this.observeOnScheduler = observeOnScheduler;
         this.subscriber = subscriber;
-    }
-
-    public void unsubscribe() {
-        subscription.unsubscribe();
+        this.initialDelay = initialDelay;
+        this.pollingInterval = pollingInterval;
     }
 
     public static class Builder {
@@ -50,6 +56,9 @@ public class Achis {
         private String hashtag;
         private Scheduler observeOnScheduler;
         private Subscriber<Item> subscriber;
+        // Polling strategy
+        private int initialDelay;
+        private int pollingInterval;
 
         public Builder socialNetworks(List<SocialNetwork> networks) {
             this.networks = networks;
@@ -71,38 +80,37 @@ public class Achis {
             return this;
         }
 
+        public Builder withPolling() {
+            this.initialDelay = INITIAL_DELAY;
+            this.pollingInterval = POLLING_INTERVAL;
+            return this;
+        }
+
+        public Builder withPolling(int initialDelay, int pollingInterval) {
+            Preconditions.checkArgument(initialDelay >= 0, "initialDelay must be 0 or greater.");
+            Preconditions.checkArgument(pollingInterval >= 1, "pollingInterval must be 1 minute or greater.");
+            this.initialDelay = initialDelay;
+            this.pollingInterval = pollingInterval;
+            return this;
+        }
+
         public Achis build() {
-            return new Achis(networks, hashtag, observeOnScheduler, subscriber);
+            return new Achis(networks, hashtag, observeOnScheduler, subscriber, initialDelay, pollingInterval);
         }
     }
 
-
-    public void performSearchByHashtag() {
-        searchByHashtagObservable()
-                .subscribeOn(Schedulers.io()) // performs networking on background thread
-                .observeOn(observeOnScheduler) // sends notifications to another Scheduler, usually the UI thread
-                .subscribe(subscriber);
+    public void searchByHashtag() {
+        Scheduler.Worker worker = Schedulers.newThread().createWorker();
+        worker.schedulePeriodically(new Action0() {
+            @Override
+            public void call() {
+                searchByHashtagObservable()
+                        .subscribeOn(Schedulers.io()) // performs networking on background thread
+                        .observeOn(observeOnScheduler) // sends notifications to another Scheduler, usually the UI thread
+                        .subscribe(subscriber);
+            }
+        }, initialDelay, pollingInterval, TimeUnit.MINUTES);
     }
-
-    public Observable<Item> searchByHashtag() {
-        // TODO-LMN Add polling strategy
-        return searchByHashtagObservable();
-    }
-
-    //    private Observable<Item> pollingObservable() {
-    //        return Observable.create(new Observable.OnSubscribe<Item>() {
-    //            @Override
-    //            public void call(final Subscriber<? super Item> subscriber) {
-    //                Schedulers.newThread().createWorker()
-    //                        .schedulePeriodically(new Action0() {
-    //                            @Override
-    //                            public void call() {
-    //                                subscriber.onNext(searchByHashtagObservable());
-    //                            }
-    //                        }, INITIAL_DELAY, POLLING_INTERVAL, TimeUnit.MINUTES);
-    //            }
-    //        });
-    //    }
 
     private Observable<Item> searchByHashtagObservable() {
         Observable<Item> observableSocialNetworks =
