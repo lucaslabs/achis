@@ -33,18 +33,18 @@ public class Achis {
     private Subscriber<Item> subscriber;
 
     // Polling strategy
-    private static final int INITIAL_DELAY = 0;
-    private static final int POLLING_INTERVAL = 1; // 1 minute
-    private int initialDelay;
-    private int pollingInterval;
+    private static final long INITIAL_DELAY = 0;
+    private static final long POLLING_INTERVAL = 1; // 1 minute
+    private long initialDelay;
+    private long pollingInterval;
 
 
     private Achis(List<SocialNetwork> socialNetworks,
             String hashtag,
             Scheduler observeOnScheduler,
             Subscriber<Item> subscriber,
-            int initialDelay,
-            int pollingInterval) {
+            long initialDelay,
+            long pollingInterval) {
         this.socialNetworks = socialNetworks;
         this.hashtag = hashtag;
         this.observeOnScheduler = observeOnScheduler;
@@ -58,9 +58,10 @@ public class Achis {
         private String hashtag;
         private Scheduler observeOnScheduler;
         private Subscriber<Item> subscriber;
+
         // Polling strategy
-        private int initialDelay;
-        private int pollingInterval;
+        private long initialDelay;
+        private long pollingInterval;
 
         public Builder socialNetworks(List<SocialNetwork> networks) {
             this.networks = networks;
@@ -88,7 +89,7 @@ public class Achis {
             return this;
         }
 
-        public Builder withPolling(int initialDelay, int pollingInterval) {
+        public Builder withPolling(long initialDelay, long pollingInterval) {
             Preconditions.checkArgument(initialDelay >= 0, "initialDelay must be 0 or greater.");
             Preconditions.checkArgument(pollingInterval >= 1, "pollingInterval must be 1 minute or greater.");
             this.initialDelay = initialDelay;
@@ -145,7 +146,7 @@ public class Achis {
                                               }
                                           }).subscribe();
                               }
-                          }, initialDelay, pollingInterval, TimeUnit.MILLISECONDS);
+                          }, initialDelay, pollingInterval, TimeUnit.MINUTES);
             }
         })
                 .subscribeOn(Schedulers.io()) // performs networking on background thread
