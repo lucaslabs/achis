@@ -145,7 +145,7 @@ public class Achis {
                                               }
                                           }).subscribe();
                               }
-                          }, INITIAL_DELAY, POLLING_INTERVAL, TimeUnit.MILLISECONDS);
+                          }, initialDelay, pollingInterval, TimeUnit.MILLISECONDS);
             }
         })
                 .subscribeOn(Schedulers.io()) // performs networking on background thread
