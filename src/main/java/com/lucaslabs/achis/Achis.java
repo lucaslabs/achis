@@ -9,9 +9,11 @@ import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 import rx.Observable;
+import rx.Observer;
 import rx.Scheduler;
 import rx.Subscriber;
 import rx.functions.Action0;
+import rx.functions.Action1;
 import rx.functions.Func1;
 import rx.functions.FuncN;
 import rx.schedulers.Schedulers;
@@ -110,6 +112,45 @@ public class Achis {
                         .subscribe(subscriber);
             }
         }, initialDelay, pollingInterval, TimeUnit.MINUTES);
+    }
+
+
+    public void manualRecursionPollingStrategy() {
+        Observable.create(new Observable.OnSubscribe<Item>() {
+            @Override
+            public void call(final Subscriber<? super Item> innerSubscriber) {
+                Schedulers.io().createWorker()
+                          .schedulePeriodically(new Action0() {
+                              @Override
+                              public void call() {
+                                  searchByHashtagObservable()
+                                          .doOnNext(new Action1<Item>() {
+                                              @Override
+                                              public void call(Item item) {
+                                                  innerSubscriber.onNext(item);
+                                              }
+                                          })
+                                          .doOnError(new Action1<Throwable>() {
+                                              @Override
+                                              public void call(Throwable throwable) {
+                                                  if (throwable != null) {
+                                                      innerSubscriber.onError(throwable);
+                                                  }
+                                              }
+                                          })
+                                          .doOnCompleted(new Action0() {
+                                              @Override
+                                              public void call() {
+                                                  innerSubscriber.onCompleted();
+                                              }
+                                          }).subscribe();
+                              }
+                          }, INITIAL_DELAY, POLLING_INTERVAL, TimeUnit.MILLISECONDS);
+            }
+        })
+                .subscribeOn(Schedulers.io()) // performs networking on background thread
+                .observeOn(observeOnScheduler) // sends notifications to another Scheduler, usually the UI thread
+                .subscribe(subscriber);
     }
 
     private Observable<Item> searchByHashtagObservable() {
